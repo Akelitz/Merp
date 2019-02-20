@@ -16,7 +16,8 @@ namespace Merp.Registry.CommandStack.Model
         IApplyEvent<PartyLegalAddressChangedEvent>,
         IApplyEvent<PartyShippingAddressChangedEvent>,
         IApplyEvent<PartyBillingAddressChangedEvent>,
-        IApplyEvent<ContactInfoSetForPartyEvent>
+        IApplyEvent<ContactInfoSetForPartyEvent>,
+        IApplyEvent<PartyUnlistedEvent>
     {
         public DateTime RegistrationDate { get; set; }
 
@@ -49,6 +50,8 @@ namespace Merp.Registry.CommandStack.Model
         /// Gets or sets the contact info
         /// </summary>
         public ContactInfo ContactInfo { get; protected set; }
+
+        public bool Unlisted { get; protected set; }
 
         /// <summary>
         /// Apply an event to the current instance
@@ -103,6 +106,15 @@ namespace Merp.Registry.CommandStack.Model
         }
 
         /// <summary>
+        /// Apply an event to the current instance
+        /// </summary>
+        /// <param name="evt">The event</param>
+        public void ApplyEvent(PartyUnlistedEvent evt)
+        {
+            Unlisted = true;
+        }
+
+        /// <summary>
         /// Sets legal address for the party
         /// </summary>
         /// <param name="address">The address</param>
@@ -111,7 +123,8 @@ namespace Merp.Registry.CommandStack.Model
         /// <param name="province">The province</param>
         /// <param name="country">The country</param>
         /// <param name="effectiveDate">The country</param>
-        public void ChangeLegalAddress(string address, string city, string postalCode, string province, string country, DateTime effectiveDate)
+        /// <param name="userId"></param>
+        public void ChangeLegalAddress(string address, string city, string postalCode, string province, string country, DateTime effectiveDate, Guid userId)
         {
             if (string.IsNullOrEmpty(address) || string.IsNullOrEmpty(city) || string.IsNullOrEmpty(country))
             {
@@ -126,7 +139,7 @@ namespace Merp.Registry.CommandStack.Model
                 throw new ArgumentException("Cannot change the legal address to an effective date before the registration date", nameof(effectiveDate));
             }
 
-            var e = new PartyLegalAddressChangedEvent(Id, address, city, postalCode, province, country, effectiveDate);            
+            var e = new PartyLegalAddressChangedEvent(Id, address, city, postalCode, province, country, effectiveDate, userId);            
             RaiseEvent(e);
         }
 
@@ -139,7 +152,8 @@ namespace Merp.Registry.CommandStack.Model
         /// <param name="province">The province</param>
         /// <param name="country">The country</param>
         /// <param name="effectiveDate">The country</param>
-        public void ChangeShippingAddress(string address, string city, string postalCode, string province, string country, DateTime effectiveDate)
+        /// <param name="userId"></param>
+        public void ChangeShippingAddress(string address, string city, string postalCode, string province, string country, DateTime effectiveDate, Guid userId)
         {
             if (string.IsNullOrEmpty(address) || string.IsNullOrEmpty(city) || string.IsNullOrEmpty(country))
             {
@@ -150,7 +164,7 @@ namespace Merp.Registry.CommandStack.Model
                 throw new ArgumentException("Cannot change the shipping address to an effective date before the registration date", nameof(effectiveDate));
             }
 
-            var e = new PartyShippingAddressChangedEvent(Id, address, city, postalCode, province, country, effectiveDate);
+            var e = new PartyShippingAddressChangedEvent(Id, address, city, postalCode, province, country, effectiveDate, userId);
             RaiseEvent(e);
         }
 
@@ -163,7 +177,8 @@ namespace Merp.Registry.CommandStack.Model
         /// <param name="province">The province</param>
         /// <param name="country">The country</param>
         /// <param name="effectiveDate">The country</param>
-        public void ChangeBillingAddress(string address, string city, string postalCode, string province, string country, DateTime effectiveDate)
+        /// <param name="userId"></param>
+        public void ChangeBillingAddress(string address, string city, string postalCode, string province, string country, DateTime effectiveDate, Guid userId)
         {
             if (string.IsNullOrEmpty(address) || string.IsNullOrEmpty(city) || string.IsNullOrEmpty(country))
             {
@@ -174,7 +189,7 @@ namespace Merp.Registry.CommandStack.Model
                 throw new ArgumentException("Cannot change the billing address to an effective date before the registration date", nameof(effectiveDate));
             }
 
-            var e = new PartyBillingAddressChangedEvent(Id, address, city, postalCode, province, country, effectiveDate);
+            var e = new PartyBillingAddressChangedEvent(Id, address, city, postalCode, province, country, effectiveDate, userId);
             RaiseEvent(e);
         }
 
@@ -187,9 +202,21 @@ namespace Merp.Registry.CommandStack.Model
         /// <param name="websiteAddress"></param>
         /// <param name="emailAddress"></param>
         /// <param name="instantMessaging"></param>
-        public void SetContactInfo(string phoneNumber, string mobileNumber, string faxNumber, string websiteAddress, string emailAddress, string instantMessaging)
+        /// <param name="userId"></param>
+        public void SetContactInfo(string phoneNumber, string mobileNumber, string faxNumber, string websiteAddress, string emailAddress, string instantMessaging, Guid userId)
         {     
-            var e = new ContactInfoSetForPartyEvent(Id, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging);
+            var e = new ContactInfoSetForPartyEvent(Id, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging, userId);
+            RaiseEvent(e);
+        }
+
+        /// <summary>
+        /// Unlist the current party
+        /// </summary>
+        /// <param name="unlistDate"></param>
+        /// <param name="userId"></param>
+        public void Unlist(DateTime unlistDate, Guid userId)
+        {
+            var e = new PartyUnlistedEvent(Id, unlistDate, userId);
             RaiseEvent(e);
         }
     }

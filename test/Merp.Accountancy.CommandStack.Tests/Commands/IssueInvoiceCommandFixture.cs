@@ -1,15 +1,16 @@
 ﻿using System;
-using NUnit.Framework;
+using Xunit;
 using Merp.Accountancy.CommandStack.Commands;
 
 namespace Merp.Accountancy.CommandStack.Tests.Commands
 {
-    [TestFixture]
+    
     public class IssueInvoiceCommandFixture
     {
-        [Test]
+        [Fact]
         public void Ctor_should_set_properties_according_to_parameters()
         {
+            var userId = Guid.NewGuid();
             DateTime invoiceDate = new DateTime(1990, 11, 11);
             string currency = "EUR";
             decimal amount = 101;
@@ -34,6 +35,7 @@ namespace Merp.Accountancy.CommandStack.Tests.Commands
             string supplierVatIndex = "XYZ";
             string supplierNationalIdentificationNumber = "04358780965";
             var sut = new IssueInvoiceCommand(
+                userId,
                 invoiceDate,
                 currency,
                 amount,
@@ -56,32 +58,35 @@ namespace Merp.Accountancy.CommandStack.Tests.Commands
                 supplierPostalCode,
                 supplierCountry,
                 supplierVatIndex,
-                supplierNationalIdentificationNumber
-                );
-            Assert.AreEqual(invoiceDate, sut.InvoiceDate);
-            Assert.AreEqual(currency, sut.Currency);
-            Assert.AreEqual(amount, sut.TaxableAmount);
-            Assert.AreEqual(taxes, sut.Taxes);
-            Assert.AreEqual(totalPrice, sut.TotalPrice);
-            Assert.AreEqual(description, sut.Description);
-            Assert.AreEqual(paymentTerms, sut.PaymentTerms);
-            Assert.AreEqual(purchaseOrderNumber, sut.PurchaseOrderNumber);
-            Assert.AreEqual(customerId, sut.Customer.Id);
-            Assert.AreEqual(customerName, sut.Customer.Name);
-            Assert.AreEqual(customerAddress, sut.Customer.StreetName);
-            Assert.AreEqual(customerCity, sut.Customer.City);
-            Assert.AreEqual(customerPostalCode, sut.Customer.PostalCode);
-            Assert.AreEqual(customerCountry, sut.Customer.Country);
-            Assert.AreEqual(customerVatIndex, sut.Customer.VatIndex);
-            Assert.AreEqual(customerNationalIdentificationNumber, sut.Customer.NationalIdentificationNumber);
+                supplierNationalIdentificationNumber,
+                null,
+                false,
+                null,
+                null);
+            Assert.Equal(invoiceDate, sut.InvoiceDate);
+            Assert.Equal(currency, sut.Currency);
+            Assert.Equal(amount, sut.TaxableAmount);
+            Assert.Equal(taxes, sut.Taxes);
+            Assert.Equal(totalPrice, sut.TotalPrice);
+            Assert.Equal(description, sut.Description);
+            Assert.Equal(paymentTerms, sut.PaymentTerms);
+            Assert.Equal(purchaseOrderNumber, sut.PurchaseOrderNumber);
+            Assert.Equal(customerId, sut.Customer.Id);
+            Assert.Equal(customerName, sut.Customer.Name);
+            Assert.Equal(customerAddress, sut.Customer.StreetName);
+            Assert.Equal(customerCity, sut.Customer.City);
+            Assert.Equal(customerPostalCode, sut.Customer.PostalCode);
+            Assert.Equal(customerCountry, sut.Customer.Country);
+            Assert.Equal(customerVatIndex, sut.Customer.VatIndex);
+            Assert.Equal(customerNationalIdentificationNumber, sut.Customer.NationalIdentificationNumber);
 
-            Assert.AreEqual(supplierName, sut.Supplier.Name);
-            Assert.AreEqual(supplierAddress, sut.Supplier.StreetName);
-            Assert.AreEqual(supplierCity, sut.Supplier.City);
-            Assert.AreEqual(supplierPostalCode, sut.Supplier.PostalCode);
-            Assert.AreEqual(supplierCountry, sut.Supplier.Country);
-            Assert.AreEqual(supplierVatIndex, sut.Supplier.VatIndex);
-            Assert.AreEqual(supplierNationalIdentificationNumber, sut.Supplier.NationalIdentificationNumber);
+            Assert.Equal(supplierName, sut.Supplier.Name);
+            Assert.Equal(supplierAddress, sut.Supplier.StreetName);
+            Assert.Equal(supplierCity, sut.Supplier.City);
+            Assert.Equal(supplierPostalCode, sut.Supplier.PostalCode);
+            Assert.Equal(supplierCountry, sut.Supplier.Country);
+            Assert.Equal(supplierVatIndex, sut.Supplier.VatIndex);
+            Assert.Equal(supplierNationalIdentificationNumber, sut.Supplier.NationalIdentificationNumber);
         }
     }
 }

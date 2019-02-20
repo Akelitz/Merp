@@ -7,12 +7,14 @@ using Rebus.Sagas;
 using Rebus.Bus;
 using System.Threading.Tasks;
 using Rebus.Handlers;
+using System.Linq;
 
 namespace Merp.Accountancy.CommandStack.Sagas
 {
     public class OutgoingInvoiceSaga : Saga<OutgoingInvoiceSaga.OutgoingInvoiceSagaData>,
         IAmInitiatedBy<IssueInvoiceCommand>,
         IAmInitiatedBy<ImportOutgoingInvoiceCommand>,
+        IAmInitiatedBy<RegisterOutgoingInvoiceCommand>,
         IHandleMessages<MarkOutgoingInvoiceAsPaidCommand>,
         IHandleMessages<MarkOutgoingInvoiceAsOverdueCommand>,
         IHandleMessages<OutgoingInvoiceSaga.OutgoingInvoiceExpiredTimeout>
@@ -36,6 +38,9 @@ namespace Merp.Accountancy.CommandStack.Sagas
             config.Correlate<ImportOutgoingInvoiceCommand>(
                 message => message.InvoiceId,
                 sagaData => sagaData.InvoiceId);
+            config.Correlate<RegisterOutgoingInvoiceCommand>(
+                message => message.InvoiceId,
+                sagaData => sagaData.InvoiceId);
             config.Correlate<MarkOutgoingInvoiceAsPaidCommand>(
                 message => message.InvoiceId,
                 sagaData => sagaData.InvoiceId);
@@ -47,116 +52,199 @@ namespace Merp.Accountancy.CommandStack.Sagas
                 sagaData => sagaData.InvoiceId);
         }
 
-        public Task Handle(IssueInvoiceCommand message)
+        public async Task Handle(IssueInvoiceCommand message)
         {
-            return Task.Factory.StartNew(() =>
+            var invoiceLineItems = new Invoice.InvoiceLineItem[0];
+            if (message.LineItems != null)
             {
-                var invoice = OutgoingInvoice.Factory.Issue(
-                    this.InvoiceNumberGenerator,
-                    message.InvoiceDate,
-                    message.Currency,
-                    message.TaxableAmount,
-                    message.Taxes,
-                    message.TotalPrice,
-                    message.Description,
-                    message.PaymentTerms,
-                    message.PurchaseOrderNumber,
-                    message.Customer.Id,
-                    message.Customer.Name,
-                    message.Customer.StreetName,
-                    message.Customer.City,
-                    message.Customer.PostalCode,
-                    message.Customer.Country,
-                    message.Customer.VatIndex,
-                    message.Customer.NationalIdentificationNumber,
-                    message.Supplier.Name,
-                    message.Supplier.StreetName,
-                    message.Supplier.City,
-                    message.Supplier.PostalCode,
-                    message.Supplier.Country,
-                    message.Supplier.VatIndex,
-                    message.Supplier.NationalIdentificationNumber
-                );
-                this.Repository.Save(invoice);
-                this.Data.InvoiceId = invoice.Id;
+                invoiceLineItems = message.LineItems
+                    .Select(i => new Invoice.InvoiceLineItem(i.Code, i.Description, i.Quantity, i.UnitPrice, i.TotalPrice, i.Vat))
+                    .ToArray();
+            }
+
+            var invoicePricesByVat = new Invoice.InvoicePriceByVat[0];
+            if (message.PricesByVat != null)
+            {
+                invoicePricesByVat = message.PricesByVat
+                    .Select(p => new Invoice.InvoicePriceByVat(p.TaxableAmount, p.VatRate, p.VatAmount, p.TotalPrice))
+                    .ToArray();
+            }
+
+            var nonTaxableItems = new Invoice.NonTaxableItem[0];
+            if (message.NonTaxableItems != null)
+            {
+                nonTaxableItems = message.NonTaxableItems
+                    .Select(t => new Invoice.NonTaxableItem(t.Description, t.Amount))
+                    .ToArray();
+            }
+
+            var invoice = OutgoingInvoice.Factory.Issue(
+                this.InvoiceNumberGenerator,
+                message.InvoiceDate,
+                message.Currency,
+                message.TaxableAmount,
+                message.Taxes,
+                message.TotalPrice,
+                message.Description,
+                message.PaymentTerms,
+                message.PurchaseOrderNumber,
+                message.Customer.Id,
+                message.Customer.Name,
+                message.Customer.StreetName,
+                message.Customer.City,
+                message.Customer.PostalCode,
+                message.Customer.Country,
+                message.Customer.VatIndex,
+                message.Customer.NationalIdentificationNumber,
+                message.Supplier.Name,
+                message.Supplier.StreetName,
+                message.Supplier.City,
+                message.Supplier.PostalCode,
+                message.Supplier.Country,
+                message.Supplier.VatIndex,
+                message.Supplier.NationalIdentificationNumber,
+                invoiceLineItems,
+                message.PricesAreVatIncluded,
+                invoicePricesByVat,
+                nonTaxableItems,
+                message.UserId
+            );
+            this.Repository.Save(invoice);
+            this.Data.InvoiceId = invoice.Id;
                 
-                if(invoice.DueDate.HasValue)
-                {
-                    var timeout = new OutgoingInvoiceExpiredTimeout(invoice.Id);
-                    Bus.Defer(invoice.DueDate.Value.Subtract(DateTime.Today), timeout);
-                }    
-            });
+            if(invoice.DueDate.HasValue)
+            {
+                var timeout = new OutgoingInvoiceExpiredTimeout(invoice.Id, message.UserId);
+                await Bus.Defer(invoice.DueDate.Value.Subtract(DateTime.Today), timeout);
+            }    
         }
 
-        public Task Handle(MarkOutgoingInvoiceAsPaidCommand message)
+        public async Task Handle(MarkOutgoingInvoiceAsPaidCommand message)
         {
-            return Task.Factory.StartNew(() =>
-            {
-                var invoice = Repository.GetById<OutgoingInvoice>(message.InvoiceId);
-                invoice.MarkAsPaid(message.PaymentDate);
-                Repository.Save(invoice);
-                this.MarkAsComplete();
-            });
+            var invoice = Repository.GetById<OutgoingInvoice>(message.InvoiceId);
+            invoice.MarkAsPaid(message.PaymentDate, message.UserId);
+            await Repository.SaveAsync(invoice);
+            this.MarkAsComplete();
         }
 
-        public Task Handle(ImportOutgoingInvoiceCommand message)
+        public async Task Handle(ImportOutgoingInvoiceCommand message)
         {
-            return Task.Factory.StartNew(() =>
-            {
-                var invoice = OutgoingInvoice.Factory.Import(
-                    message.InvoiceId,
-                    message.InvoiceNumber,
-                    message.InvoiceDate,
-                    message.DueDate,
-                    message.Currency,
-                    message.TaxableAmount,
-                    message.Taxes,
-                    message.TotalPrice,
-                    message.Description,
-                    message.PaymentTerms,
-                    message.PurchaseOrderNumber,
-                    message.Customer.Id,
-                    message.Customer.Name,
-                    message.Customer.StreetName,
-                    message.Customer.City,
-                    message.Customer.PostalCode,
-                    message.Customer.Country,
-                    message.Customer.VatIndex,
-                    message.Customer.NationalIdentificationNumber,
-                    message.Supplier.Name,
-                    message.Supplier.StreetName,
-                    message.Supplier.City,
-                    message.Supplier.PostalCode,
-                    message.Supplier.Country,
-                    message.Supplier.VatIndex,
-                    message.Supplier.NationalIdentificationNumber
-                );
-                this.Repository.Save(invoice);
-                this.Data.InvoiceId = invoice.Id;
-            });
+            var invoice = OutgoingInvoice.Factory.Import(
+                message.InvoiceId,
+                message.InvoiceNumber,
+                message.InvoiceDate,
+                message.DueDate,
+                message.Currency,
+                message.TaxableAmount,
+                message.Taxes,
+                message.TotalPrice,
+                message.Description,
+                message.PaymentTerms,
+                message.PurchaseOrderNumber,
+                message.Customer.Id,
+                message.Customer.Name,
+                message.Customer.StreetName,
+                message.Customer.City,
+                message.Customer.PostalCode,
+                message.Customer.Country,
+                message.Customer.VatIndex,
+                message.Customer.NationalIdentificationNumber,
+                message.Supplier.Name,
+                message.Supplier.StreetName,
+                message.Supplier.City,
+                message.Supplier.PostalCode,
+                message.Supplier.Country,
+                message.Supplier.VatIndex,
+                message.Supplier.NationalIdentificationNumber
+            );
+            await this.Repository.SaveAsync(invoice);
+            this.Data.InvoiceId = invoice.Id;
         }
 
-        public Task Handle(MarkOutgoingInvoiceAsOverdueCommand message)
+        public async Task Handle(RegisterOutgoingInvoiceCommand message)
         {
-            return Task.Factory.StartNew(() =>
+            var invoiceLineItems = new Invoice.InvoiceLineItem[0];
+            if (message.LineItems != null)
             {
-                var invoice = Repository.GetById<OutgoingInvoice>(message.InvoiceId);
-                if (!invoice.PaymentDate.HasValue)
-                    invoice.MarkAsOverdue();
-            });
+                invoiceLineItems = message.LineItems
+                    .Select(i => new Invoice.InvoiceLineItem(i.Code, i.Description, i.Quantity, i.UnitPrice, i.TotalPrice, i.Vat))
+                    .ToArray();
+            }
+
+            var invoicePricesByVat = new Invoice.InvoicePriceByVat[0];
+            if (message.PricesByVat != null)
+            {
+                invoicePricesByVat = message.PricesByVat
+                    .Select(p => new Invoice.InvoicePriceByVat(p.TaxableAmount, p.VatRate, p.VatAmount, p.TotalPrice))
+                    .ToArray();
+            }
+
+            var nonTaxableItems = new Invoice.NonTaxableItem[0];
+            if (message.NonTaxableItems != null)
+            {
+                nonTaxableItems = message.NonTaxableItems
+                    .Select(t => new Invoice.NonTaxableItem(t.Description, t.Amount))
+                    .ToArray();
+            }
+
+            var invoice = OutgoingInvoice.Factory.Register(
+                message.InvoiceNumber,
+                message.InvoiceDate,
+                message.DueDate,
+                message.Currency,
+                message.TaxableAmount,
+                message.Taxes,
+                message.TotalPrice,
+                message.Description,
+                message.PaymentTerms,
+                message.PurchaseOrderNumber,
+                message.Customer.Id,
+                message.Customer.Name,
+                message.Customer.StreetName,
+                message.Customer.City,
+                message.Customer.PostalCode,
+                message.Customer.Country,
+                message.Customer.VatIndex,
+                message.Customer.NationalIdentificationNumber,
+                message.Supplier.Name,
+                message.Supplier.StreetName,
+                message.Supplier.City,
+                message.Supplier.PostalCode,
+                message.Supplier.Country,
+                message.Supplier.VatIndex,
+                message.Supplier.NationalIdentificationNumber,
+                invoiceLineItems,
+                message.PricesAreVatIncluded,
+                invoicePricesByVat,
+                nonTaxableItems,
+                message.UserId
+            );
+            this.Repository.Save(invoice);
+            this.Data.InvoiceId = invoice.Id;
+
+            if (invoice.DueDate.HasValue)
+            {
+                var timeout = new OutgoingInvoiceExpiredTimeout(invoice.Id, message.UserId);
+                await Bus.Defer(invoice.DueDate.Value.Subtract(DateTime.Today), timeout);
+            }
         }
 
-        public Task Handle(OutgoingInvoiceExpiredTimeout message)
+        public async Task Handle(MarkOutgoingInvoiceAsOverdueCommand message)
         {
-            return Task.Factory.StartNew(() =>
+            var invoice = Repository.GetById<OutgoingInvoice>(message.InvoiceId);
+            if (!invoice.PaymentDate.HasValue)
+                invoice.MarkAsOverdue(message.UserId);
+            await Repository.SaveAsync(invoice);
+        }
+
+        public async Task Handle(OutgoingInvoiceExpiredTimeout message)
+        {
+            var invoice = Repository.GetById<OutgoingInvoice>(message.InvoiceId);
+            if (!invoice.PaymentDate.HasValue)
             {
-                var invoice = Repository.GetById<OutgoingInvoice>(message.InvoiceId);
-                if (!invoice.PaymentDate.HasValue)
-                {
-                    var cmd = new MarkOutgoingInvoiceAsOverdueCommand(message.InvoiceId);
-                    Bus.Send(cmd);
-                }
-            });
+                var cmd = new MarkOutgoingInvoiceAsOverdueCommand(message.UserId, message.InvoiceId);
+                await Bus.Send(cmd);
+            }
         }
 
         public class OutgoingInvoiceSagaData : SagaData
@@ -168,7 +256,9 @@ namespace Merp.Accountancy.CommandStack.Sagas
         {
             public Guid InvoiceId { get; private set; }
 
-            public OutgoingInvoiceExpiredTimeout(Guid invoiceId)
+            public Guid UserId { get; private set; }
+
+            public OutgoingInvoiceExpiredTimeout(Guid invoiceId, Guid userId)
             {
                 InvoiceId = invoiceId;
             }

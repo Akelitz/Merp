@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Mastreeno ltd, Andrea Saltarello</Authors>
+    <Product>Merp</Product>
+    <PackageLicenseUrl>https://github.com/mastreeno/Merp/blob/master/LICENSE.txt</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/mastreeno/Merp</PackageProjectUrl>
+    <Configurations>Debug;Release;AzureMongoDB</Configurations>
+  </PropertyGroup>
+
+</Project>

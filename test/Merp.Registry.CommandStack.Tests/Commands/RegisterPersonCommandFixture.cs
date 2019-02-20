@@ -15,6 +15,7 @@ namespace Merp.Registry.CommandStack.Tests.Commands
         [Fact]
         public void Ctor_should_properly_initialise_instance()
         {
+            var userId = Guid.NewGuid();
             var personId = Guid.Empty;
             var firstName = "Martin";
             var lastName = "Gore";
@@ -25,6 +26,16 @@ namespace Merp.Registry.CommandStack.Tests.Commands
             var postalCode = "20123";
             var province = "MI";
             var country = "Italy";
+            var shippingAddressAddress = "Via Torino 51";
+            var shippingAddressCity = "Milan";
+            var shippingAddressPostalCode = "20123";
+            var shippingAddressProvince = "MI";
+            var shippingAddressCountry = "Italy";
+            var billingAddressAddress = "Via Torino 51";
+            var billingAddressCity = "Milan";
+            var billingAddressPostalCode = "20123";
+            var billingAddressProvince = "MI";
+            var billingAddressCountry = "Italy";
             var phoneNumber = "405040420";
             var mobileNumber = "527452042";
             var faxNumber = "0405763872";
@@ -32,17 +43,20 @@ namespace Merp.Registry.CommandStack.Tests.Commands
             var emailAddress = "martin@gore.com";
             var instantMessaging = "@im";
 
-            var sut = new RegisterPersonCommand(firstName, lastName, nationalIdentificationNumber, vatNumber, address, city, postalCode, province, country, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging);
+            var sut = new RegisterPersonCommand(userId, firstName, lastName, nationalIdentificationNumber, vatNumber, address, city, postalCode, province, country, 
+                shippingAddressAddress, shippingAddressPostalCode, shippingAddressCity, shippingAddressProvince, shippingAddressCountry,
+                billingAddressAddress, billingAddressPostalCode, billingAddressCity, billingAddressProvince, billingAddressCountry, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging);
+
             Assert.Equal(personId, sut.PersonId);
             Assert.Equal(firstName, sut.FirstName);
             Assert.Equal(lastName, sut.LastName);
             Assert.Equal(nationalIdentificationNumber, sut.NationalIdentificationNumber);
             Assert.Equal(vatNumber, sut.VatNumber);
-            Assert.Equal(address, sut.Address);
-            Assert.Equal(city, sut.City);
-            Assert.Equal(postalCode, sut.PostalCode);
-            Assert.Equal(province, sut.Province);
-            Assert.Equal(country, sut.Country);
+            Assert.Equal(address, sut.LegalAddressAddress);
+            Assert.Equal(city, sut.LegalAddressCity);
+            Assert.Equal(postalCode, sut.LegalAddressPostalCode);
+            Assert.Equal(province, sut.LegalAddressProvince);
+            Assert.Equal(country, sut.LegalAddressCountry);
             Assert.Equal(phoneNumber, sut.PhoneNumber);
             Assert.Equal(mobileNumber, sut.MobileNumber);
             Assert.Equal(faxNumber, sut.FaxNumber);
@@ -54,6 +68,7 @@ namespace Merp.Registry.CommandStack.Tests.Commands
         [Fact]
         public void Ctor_should_throw_on_null_firstName()
         {
+            var userId = Guid.NewGuid();
             var personId = Guid.NewGuid();
             string firstName = null;
             var lastName = "Gore";
@@ -64,6 +79,16 @@ namespace Merp.Registry.CommandStack.Tests.Commands
             var postalCode = "20123";
             var province = "MI";
             var country = "Italy";
+            var shippingAddressAddress = "Via Torino 51";
+            var shippingAddressCity = "Milan";
+            var shippingAddressPostalCode = "20123";
+            var shippingAddressProvince = "MI";
+            var shippingAddressCountry = "Italy";
+            var billingAddressAddress = "Via Torino 51";
+            var billingAddressCity = "Milan";
+            var billingAddressPostalCode = "20123";
+            var billingAddressProvince = "MI";
+            var billingAddressCountry = "Italy";
             var phoneNumber = "405040420";
             var mobileNumber = "527452042";
             var faxNumber = "0405763872";
@@ -72,7 +97,9 @@ namespace Merp.Registry.CommandStack.Tests.Commands
             var instantMessaging = "@im";
 
             Executing.This(
-                () => new RegisterPersonCommand(firstName, lastName, nationalIdentificationNumber, vatNumber, address, city, postalCode, province, country, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging)
+                () => new RegisterPersonCommand(userId, firstName, lastName, nationalIdentificationNumber, vatNumber, address, city, postalCode, province, country,
+                shippingAddressAddress, shippingAddressPostalCode, shippingAddressCity, shippingAddressProvince, shippingAddressCountry,
+                billingAddressAddress, billingAddressPostalCode, billingAddressCity, billingAddressProvince, billingAddressCountry, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging)
             )
             .Should()
             .Throw<ArgumentException>()
@@ -87,6 +114,7 @@ namespace Merp.Registry.CommandStack.Tests.Commands
         [Fact]
         public void Ctor_should_throw_on_null_lastName()
         {
+            var userId = Guid.NewGuid();
             var personId = Guid.NewGuid();
             var firstName = "Martin";
             string lastName = null;
@@ -97,6 +125,16 @@ namespace Merp.Registry.CommandStack.Tests.Commands
             var postalCode = "20123";
             var province = "MI";
             var country = "Italy";
+            var shippingAddressAddress = "Via Torino 51";
+            var shippingAddressCity = "Milan";
+            var shippingAddressPostalCode = "20123";
+            var shippingAddressProvince = "MI";
+            var shippingAddressCountry = "Italy";
+            var billingAddressAddress = "Via Torino 51";
+            var billingAddressCity = "Milan";
+            var billingAddressPostalCode = "20123";
+            var billingAddressProvince = "MI";
+            var billingAddressCountry = "Italy";
             var phoneNumber = "405040420";
             var mobileNumber = "527452042";
             var faxNumber = "0405763872";
@@ -105,7 +143,9 @@ namespace Merp.Registry.CommandStack.Tests.Commands
             var instantMessaging = "@im";
 
             Executing.This(
-                () => new RegisterPersonCommand(firstName, lastName, nationalIdentificationNumber, vatNumber, address, city, postalCode, province, country, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging)
+                () => new RegisterPersonCommand(userId, firstName, lastName, nationalIdentificationNumber, vatNumber, address, city, postalCode, province, country,
+                shippingAddressAddress, shippingAddressPostalCode, shippingAddressCity, shippingAddressProvince, shippingAddressCountry,
+                billingAddressAddress, billingAddressPostalCode, billingAddressCity, billingAddressProvince, billingAddressCountry, phoneNumber, mobileNumber, faxNumber, websiteAddress, emailAddress, instantMessaging)
             )
             .Should()
             .Throw<ArgumentException>()

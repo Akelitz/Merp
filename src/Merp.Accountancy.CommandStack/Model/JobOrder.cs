@@ -12,14 +12,16 @@ using Merp.Accountancy.CommandStack.Services;
 namespace Merp.Accountancy.CommandStack.Model
 {
     public class JobOrder : Aggregate,
+        IApplyEvent<IncomingCreditNoteLinkedToJobOrderEvent>,
         IApplyEvent<IncomingInvoiceLinkedToJobOrderEvent>,
+        IApplyEvent<OutgoingCreditNoteLinkedToJobOrderEvent>,
         IApplyEvent<OutgoingInvoiceLinkedToJobOrderEvent>,
         IApplyEvent<JobOrderExtendedEvent>,
         IApplyEvent<JobOrderCompletedEvent>,
         IApplyEvent<JobOrderRegisteredEvent>
     {
         public Guid CustomerId { get; protected set; }
-
+        public Guid? ContactPersonId { get; protected set; }
         public Guid ManagerId { get; protected set; }
 
         public string Name { get; protected set; }
@@ -78,36 +80,19 @@ namespace Merp.Accountancy.CommandStack.Model
             }
         }
 
-        [Obsolete()]
-        public static decimal CalculateBalance(IEventStore es, Guid jobOrderId, DateTime balanceDate)
+        public void ApplyEvent(IncomingCreditNoteLinkedToJobOrderEvent evt)
         {
-            if (es == null)
-                throw new ArgumentNullException(nameof(es));
-
-            var outgoingInvoicesIds = es
-                .Find<OutgoingInvoiceLinkedToJobOrderEvent>(e => e.JobOrderId == jobOrderId && e.TimeStamp <= balanceDate)
-                .Select(e => e.InvoiceId)
-                .ToArray();
-            var earnings = es
-                .Find<OutgoingInvoiceIssuedEvent>(e => outgoingInvoicesIds.Contains(e.InvoiceId))
-                .Sum(e => e.TaxableAmount);
-
-            var incomingInvoicesIds = es
-                .Find<IncomingInvoiceLinkedToJobOrderEvent>(e => e.JobOrderId == jobOrderId && e.TimeStamp <= balanceDate)
-                .Select(e => e.InvoiceId)
-                .ToArray();
-            var costs = es
-                .Find<IncomingInvoiceRegisteredEvent>(e => incomingInvoicesIds.Any(id => e.InvoiceId == id))
-                .Sum(e => e.TaxableAmount);
-
-            decimal balance = earnings - costs;
-
-            return balance;
+            this.Balance -= evt.Amount;
         }
 
         public void ApplyEvent(IncomingInvoiceLinkedToJobOrderEvent evt)
         {
             this.Balance -= evt.Amount;
+        }
+
+        public void ApplyEvent(OutgoingCreditNoteLinkedToJobOrderEvent evt)
+        {
+            this.Balance += evt.Amount;
         }
 
         public void ApplyEvent(OutgoingInvoiceLinkedToJobOrderEvent evt)
@@ -131,6 +116,7 @@ namespace Merp.Accountancy.CommandStack.Model
         {
             Id = evt.JobOrderId;
             CustomerId = evt.CustomerId;
+            ContactPersonId = evt.ContactPersonId;
             ManagerId = evt.ManagerId;
             DateOfStart = evt.DateOfStart;
             DueDate = evt.DueDate;
@@ -146,19 +132,50 @@ namespace Merp.Accountancy.CommandStack.Model
         }
 
         /// <summary>
+        /// Associate an incoming credit note to the current Job Order
+        /// </summary>
+        /// <param name="eventStore">The event store</param>
+        /// <param name="creditNoteId">The Id of the Credit note to be associated to the current Job Order</param>
+        /// <param name="userId">The Id of the current user</param>
+        /// <exception cref="InvalidOperationException">Thrown if the specified creditNoteId refers to an invoice which has already been associated to a Job Order</exception>
+        public void LinkIncomingCreditNote(IEventStore eventStore, Guid creditNoteId, DateTime dateOfLink, decimal amount, Guid userId)
+        {
+            if (this.IsCompleted)
+                throw new InvalidOperationException("Can't relate new revenues to a completed job order");
+            var @event = new IncomingCreditNoteLinkedToJobOrderEvent(creditNoteId, this.Id, dateOfLink, amount, userId);
+            RaiseEvent(@event);
+        }
+
+        /// <summary>
         /// Associate an incoming invoice to the current Job Order
         /// </summary>
         /// <param name="eventStore">The event store</param>
         /// <param name="invoiceId">The Id of the Invoice to be associated to the current Job Order</param>
+        /// <param name="userId">The Id of the current user</param>
         /// <exception cref="InvalidOperationException">Thrown if the specified invoiceId refers to an invoice which has already been associated to a Job Order</exception>
-        public void LinkIncomingInvoice(IEventStore eventStore, Guid invoiceId, DateTime dateOfLink, decimal amount)
+        public void LinkIncomingInvoice(IEventStore eventStore, Guid invoiceId, DateTime dateOfLink, decimal amount, Guid userId)
         {
             if (this.IsCompleted)
                 throw new InvalidOperationException("Can't relate new costs to a completed job order");
-            var count = eventStore.Find<IncomingInvoiceLinkedToJobOrderEvent>(e => e.InvoiceId == invoiceId && e.JobOrderId == this.Id).Count();
-            if(count>0)
-                throw new InvalidOperationException("The specified invoice is already associated to a Job Order.");
-            var @event = new IncomingInvoiceLinkedToJobOrderEvent(invoiceId, this.Id, dateOfLink, amount);
+            var @event = new IncomingInvoiceLinkedToJobOrderEvent(invoiceId, this.Id, dateOfLink, amount, userId);
+            RaiseEvent(@event);
+        }
+
+        /// <summary>
+        /// Associate an outgoing credit note to the current Job Order
+        /// </summary>
+        /// <param name="eventStore">The event store</param>
+        /// <param name="creditNoteId">The Id of the Credit note to be associated to the current Job Order</param>
+        /// <param name="userId">The Id of the current user</param>
+        /// <exception cref="InvalidOperationException">Thrown if the specified creditNoteId refers to a credit note which has already been associated to a Job Order</exception>
+        public void LinkOutgoingCreditNote(IEventStore eventStore, Guid creditNoteId, DateTime dateOfLink, decimal amount, Guid userId)
+        {
+            if (this.IsCompleted)
+            {
+                throw new InvalidOperationException("Can't relate new costs to a completed job order");
+            }
+
+            var @event = new OutgoingCreditNoteLinkedToJobOrderEvent(creditNoteId, this.Id, dateOfLink, amount, userId);
             RaiseEvent(@event);
         }
 
@@ -167,19 +184,17 @@ namespace Merp.Accountancy.CommandStack.Model
         /// </summary>
         /// <param name="eventStore">The event store</param>
         /// <param name="invoiceId">The Id of the Invoice to be associated to the current Job Order</param>
+        /// <param name="userId">The Id of the current user</param>
         /// <exception cref="InvalidOperationException">Thrown if the specified invoiceId refers to an invoice which has already been associated to a Job Order</exception>
-        public void LinkOutgoingInvoice(IEventStore eventStore, Guid invoiceId, DateTime dateOfLink, decimal amount)
+        public void LinkOutgoingInvoice(IEventStore eventStore, Guid invoiceId, DateTime dateOfLink, decimal amount, Guid userId)
         {
             if (this.IsCompleted)
                 throw new InvalidOperationException("Can't relate new revenues to a completed job order");
-            var count = eventStore.Find<OutgoingInvoiceLinkedToJobOrderEvent>(e => e.InvoiceId == invoiceId && e.JobOrderId == this.Id).Count();
-            if (count > 0)
-                throw new InvalidOperationException("The specified invoice is already associated to a Job Order.");
-            var @event = new OutgoingInvoiceLinkedToJobOrderEvent(invoiceId, this.Id, dateOfLink, amount);
+            var @event = new OutgoingInvoiceLinkedToJobOrderEvent(invoiceId, this.Id, dateOfLink, amount, userId);
             RaiseEvent(@event);
         }
 
-        public void Extend(DateTime newDueDate, decimal price)
+        public void Extend(DateTime newDueDate, decimal price, Guid userId)
         {
             if (this.IsCompleted)
                 throw new InvalidOperationException("Can't extend a completed job order.");
@@ -189,12 +204,13 @@ namespace Merp.Accountancy.CommandStack.Model
             var @event = new JobOrderExtendedEvent(
                 this.Id,
                 newDueDate,
-                price
+                price,
+                userId
             );
             RaiseEvent(@event);
         }
 
-        public void MarkAsCompleted(DateTime dateOfCompletion)
+        public void MarkAsCompleted(DateTime dateOfCompletion, Guid userId)
         {
             if (this.DateOfStart > dateOfCompletion)
                 throw new ArgumentException("The date of completion cannot precede the date of start.", nameof(dateOfCompletion));
@@ -203,14 +219,15 @@ namespace Merp.Accountancy.CommandStack.Model
 
             var @event = new JobOrderCompletedEvent(
                 this.Id,
-                dateOfCompletion
+                dateOfCompletion,
+                userId
             );
             RaiseEvent(@event);
         }
 
         public class Factory
         {
-            public static JobOrder CreateNewInstance(IJobOrderNumberGenerator jobOrderNumberGenerator, Guid customerId, string customerName, Guid managerId, decimal? price, string currency, DateTime dateOfStart, DateTime dueDate, bool isTimeAndMaterial, string name, string purchaseOrderNumber, string description)
+            public static JobOrder RegisterNew(IJobOrderNumberGenerator jobOrderNumberGenerator, Guid customerId, string customerName, Guid? contactPersonId, Guid managerId, decimal? price, string currency, DateTime dateOfStart, DateTime dueDate, bool isTimeAndMaterial, string name, string purchaseOrderNumber, string description, Guid userId)
             {
                 if (jobOrderNumberGenerator == null)
                     throw new ArgumentNullException(nameof(jobOrderNumberGenerator));
@@ -227,6 +244,7 @@ namespace Merp.Accountancy.CommandStack.Model
                     Guid.NewGuid(),
                     customerId,
                     customerName,
+                    contactPersonId,
                     managerId,
                     price,
                     currency,
@@ -237,14 +255,15 @@ namespace Merp.Accountancy.CommandStack.Model
                     name,
                     jobOrderNumberGenerator.Generate(),
                     purchaseOrderNumber,
-                    description
+                    description,
+                    userId
                     );
                 var jobOrder = new JobOrder();
                 jobOrder.RaiseEvent(@event);
                 return jobOrder;
             }
 
-            public static JobOrder Import(Guid jobOrderId, string jobOrderNumber, Guid customerId, string customerName, Guid managerId, decimal? price, string currency, DateTime dateOfRegistration, DateTime dateOfStart, DateTime dueDate, bool isTimeAndMaterial, string name, string purchaseOrderNumber, string description)
+            public static JobOrder Import(Guid jobOrderId, string jobOrderNumber, Guid customerId, string customerName, Guid? contactPersonId, Guid managerId, decimal? price, string currency, DateTime dateOfRegistration, DateTime dateOfStart, DateTime dueDate, bool isTimeAndMaterial, string name, string purchaseOrderNumber, string description)
             {
                 if (string.IsNullOrWhiteSpace(jobOrderNumber))
                     throw new ArgumentNullException(nameof(jobOrderNumber), "A job order number must be provided");
@@ -261,6 +280,7 @@ namespace Merp.Accountancy.CommandStack.Model
                     jobOrderId,
                     customerId,
                     customerName,
+                    contactPersonId,
                     managerId,
                     price,
                     currency,
@@ -271,8 +291,8 @@ namespace Merp.Accountancy.CommandStack.Model
                     name,
                     jobOrderNumber,
                     purchaseOrderNumber,
-                    description
-                    );
+                    description,
+                    Guid.Empty);
                 var jobOrder = new JobOrder();
                 jobOrder.RaiseEvent(@event);
                 return jobOrder;
